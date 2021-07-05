@@ -31,9 +31,36 @@ z = gauss2d(x, y)
 pylab.imshow(z)
 pylab.show()
 
+# CPU
+
+z0 = z.copy()
+z1 = np.zeros_like(z0)
+
+
+@njit
+def smooth_jit(x0, x1):
+    for i in range(1, x0.shape[0] - 1):
+        for j in range(1, x0.shape[1] - 1):
+            x1[i, j] = 0.25 * (x0[i, j - 1] + x0[i, j + 1] +
+                               x0[i - 1, j] + x0[i + 1, j])
+
+
+for i in range(2000):
+    if (i % 2) == 0:
+        smooth_jit(z0, z1)
+    else:
+        smooth_jit(z1, z0)
+
+z_cpu = z0
+
+pylab.imshow(z_cpu)
+pylab.show()
+
+
+# GPU
 
 @cuda.jit
-def smooth(x0, x1):
+def smooth_cuda(x0, x1):
     i, j = cuda.grid(2)
 
     i_in_bounds = (i > 0) and (i < (x0.shape[0] - 1))
@@ -49,11 +76,14 @@ z1 = cuda.device_array_like(np.zeros_like(z))
 
 for i in range(2000):
     if (i % 2) == 0:
-        smooth[(16, 16), (16, 16)](z0, z1)
-        z2 = z1.copy_to_host()
+        smooth_cuda[(16, 16), (16, 16)](z0, z1)
     else:
-        smooth[(16, 16), (16, 16)](z1, z0)
-        z2 = z0.copy_to_host()
+        smooth_cuda[(16, 16), (16, 16)](z1, z0)
 
-pylab.imshow(z2)
+
+z_cuda = z0.copy_to_host()
+
+pylab.imshow(z_cuda)
 pylab.show()
+
+np.testing.assert_allclose(z_cpu, z_cuda)
