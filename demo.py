@@ -5,9 +5,12 @@ import pylab
 from time import perf_counter
 
 
+ITERATIONS = 2
+POINTS = 550
+
 @njit
 def gauss2d(x, y):
-    grid = np.empty_like(x)
+    grid = np.empty_like(x).astype(np.float32)
 
     a = 1.0 / np.sqrt(2 * math.pi)
 
@@ -19,8 +22,8 @@ def gauss2d(x, y):
     return grid
 
 
-X = np.linspace(-5, 5, 100)
-Y = np.linspace(-5, 5, 100)
+X = np.linspace(-5, 5, POINTS)
+Y = np.linspace(-5, 5, POINTS)
 x, y = np.meshgrid(X, Y)
 
 z = gauss2d(x, y)
@@ -43,11 +46,11 @@ def smooth(x0, x1):
 
 start = perf_counter()
 
-for i in range(2000):
-    if (i % 2) == 0:
-        smooth(z0, z1)
-    else:
-        smooth(z1, z0)
+#for i in range(2000):
+#    if (i % 2) == 0:
+#        smooth(z0, z1)
+#    else:
+#        smooth(z1, z0)
 
 end = perf_counter()
 
@@ -77,7 +80,7 @@ smooth_jit(z0, z1)
 
 start = perf_counter()
 
-for i in range(2000):
+for i in range(ITERATIONS):
     if (i % 2) == 0:
         smooth_jit(z0, z1)
     else:
@@ -99,7 +102,7 @@ def smooth_cuda(x0, x1):
     i, j = cuda.grid(2)
 
     i_in_bounds = (i > 0) and (i < (x0.shape[0] - 1))
-    j_in_bounds = (j > 0) and (j < (x1.shape[1] - 1))
+    j_in_bounds = (j > 0) and (j < (x0.shape[1] - 1))
 
     if i_in_bounds and j_in_bounds:
         x1[i, j] = 0.25 * (x0[i, j - 1] + x0[i, j + 1] +
@@ -110,11 +113,11 @@ def smooth_cuda(x0, x1):
 
 z0 = cuda.to_device(z)
 z1 = cuda.device_array_like(np.zeros_like(z))
-smooth_cuda[(16, 16), (16, 16)](z0, z1)
+#smooth_cuda[(16, 16), (16, 16)](z0, z1)
 
 start = perf_counter()
 
-for i in range(2000):
+for i in range(ITERATIONS):
     if (i % 2) == 0:
         smooth_cuda[(16, 16), (16, 16)](z0, z1)
     else:
@@ -130,8 +133,18 @@ time_cuda = end - start
 pylab.imshow(z_cuda)
 pylab.show()
 
-np.testing.assert_allclose(z_python, z_cpu)
-np.testing.assert_allclose(z_python, z_cuda)
-print(f"Python time: {time_python}")
+#np.testing.assert_allclose(z_python, z_cpu)
+#np.testing.assert_allclose(z_python, z_cuda)
+#np.testing.assert_allclose(z_cpu, z_cuda)
+
+res_diff = np.abs(z_cpu - z_cuda)
+breakpoint()
+print(np.argmax(res_diff))
+#print(res_diff[255, 255])
+
+pylab.imshow(res_diff)
+pylab.show()
+
+#print(f"Python time: {time_python}")
 print(f"CPU time: {time_cpu}")
 print(f"CUDA time: {time_cuda}")
