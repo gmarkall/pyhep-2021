@@ -31,7 +31,32 @@ z = gauss2d(x, y)
 pylab.imshow(z)
 pylab.show()
 
-# CPU
+# Python
+
+z0 = z.copy()
+z1 = np.zeros_like(z0)
+
+
+def smooth(x0, x1):
+    for i in range(1, x0.shape[0] - 1):
+        for j in range(1, x0.shape[1] - 1):
+            x1[i, j] = 0.25 * (x0[i, j - 1] + x0[i, j + 1] +
+                               x0[i - 1, j] + x0[i + 1, j])
+
+
+for i in range(2000):
+    if (i % 2) == 0:
+        smooth(z0, z1)
+    else:
+        smooth(z1, z0)
+
+z_python = z0
+
+pylab.imshow(z_python)
+pylab.show()
+
+
+# CPU JIT
 
 z0 = z.copy()
 z1 = np.zeros_like(z0)
@@ -86,4 +111,5 @@ z_cuda = z0.copy_to_host()
 pylab.imshow(z_cuda)
 pylab.show()
 
-np.testing.assert_allclose(z_cpu, z_cuda)
+np.testing.assert_allclose(z_python, z_cpu)
+np.testing.assert_allclose(z_python, z_cuda)
