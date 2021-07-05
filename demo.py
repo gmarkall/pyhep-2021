@@ -1,16 +1,17 @@
-from numba import cuda, njit
+from numba import cuda, njit, prange
 import numpy as np
 import math
 import pylab
 from time import perf_counter
 
 
-ITERATIONS = 2
-POINTS = 550
+ITERATIONS = 1000
+POINTS = 1000
+
 
 @njit
 def gauss2d(x, y):
-    grid = np.empty_like(x).astype(np.float32)
+    grid = np.empty_like(x)
 
     a = 1.0 / np.sqrt(2 * math.pi)
 
@@ -67,9 +68,9 @@ z0 = z.copy()
 z1 = np.zeros_like(z0)
 
 
-@njit
+@njit(parallel=True)
 def smooth_jit(x0, x1):
-    for i in range(1, x0.shape[0] - 1):
+    for i in prange(1, x0.shape[0] - 1):
         for j in range(1, x0.shape[1] - 1):
             x1[i, j] = 0.25 * (x0[i, j - 1] + x0[i, j + 1] +
                                x0[i - 1, j] + x0[i + 1, j])
@@ -113,15 +114,19 @@ def smooth_cuda(x0, x1):
 
 z0 = cuda.to_device(z)
 z1 = cuda.device_array_like(np.zeros_like(z))
-#smooth_cuda[(16, 16), (16, 16)](z0, z1)
+
+
+blockdim = (16, 16)
+griddim = ((z0.shape[0] // blockdim[0]) + 1, (z0.shape[1] // blockdim[1]) + 1)
+smooth_cuda[griddim, blockdim](z0, z1)
 
 start = perf_counter()
 
 for i in range(ITERATIONS):
     if (i % 2) == 0:
-        smooth_cuda[(16, 16), (16, 16)](z0, z1)
+        smooth_cuda[griddim, blockdim](z0, z1)
     else:
-        smooth_cuda[(16, 16), (16, 16)](z1, z0)
+        smooth_cuda[griddim, blockdim](z1, z0)
 
 # Make sure the GPU is finished before we stop timing
 cuda.synchronize()
@@ -135,16 +140,16 @@ pylab.show()
 
 #np.testing.assert_allclose(z_python, z_cpu)
 #np.testing.assert_allclose(z_python, z_cuda)
-#np.testing.assert_allclose(z_cpu, z_cuda)
 
 res_diff = np.abs(z_cpu - z_cuda)
-breakpoint()
-print(np.argmax(res_diff))
+#breakpoint()
+print(np.unravel_index(np.argmax(res_diff), res_diff.shape))
 #print(res_diff[255, 255])
 
 pylab.imshow(res_diff)
 pylab.show()
 
+np.testing.assert_allclose(z_cpu, z_cuda)
 #print(f"Python time: {time_python}")
 print(f"CPU time: {time_cpu}")
 print(f"CUDA time: {time_cuda}")
